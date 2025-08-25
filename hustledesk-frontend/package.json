@@ -1,0 +1,25 @@
+{
+  "name": "hustledesk-frontend",
+  "version": "1.0.0",
+  "description": "Frontend for HustleDesk - Your Hustle. Your Desk. Manage it all.",
+  "main": "start-server.js",
+  "scripts": {
+    "start": "node start-server.js",
+    "dev": "node start-server.js",
+    "test": "echo \"No tests specified\" && exit 0"
+  },
+  "keywords": [
+    "hustledesk",
+    "business",
+    "management",
+    "sales",
+    "expenses",
+    "invoices",
+    "customers"
+  ],
+  "author": "HustleDesk Team",
+  "license": "MIT",
+  "engines": {
+    "node": ">=14.0.0"
+  }
+}

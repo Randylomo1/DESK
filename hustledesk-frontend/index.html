@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HustleDesk - Your Hustle. Your Desk. Manage it all.</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body class="bg-gradient-to-br from-blue-600 to-purple-600 min-h-screen flex items-center justify-center">
+    <div class="text-center text-white">
+        <!-- Logo and Animation -->
+        <div class="mb-8">
+            <div class="w-24 h-24 mx-auto mb-4 bg-white rounded-2xl flex items-center justify-center animate-pulse">
+                <span class="text-3xl font-bold text-blue-600">HD</span>
+            </div>
+            <h1 class="text-4xl font-bold mb-2">HustleDesk</h1>
+            <p class="text-lg opacity-90">Your Hustle. Your Desk. Manage it all.</p>
+        </div>
+
+        <!-- Loading Animation -->
+        <div class="w-16 h-16 mx-auto border-4 border-white border-t-transparent rounded-full animate-spin mb-8"></div>
+
+        <!-- Progress to welcome screen -->
+        <div class="mt-8">
+            <p class="text-sm opacity-80 mb-4">Loading your hustle...</p>
+            <button onclick="redirectToWelcome()" class="bg-white text-blue-600 px-6 py-2 rounded-full font-semibold hover:bg-gray-100 transition-colors">
+                Get Started
+            </button>
+        </div>
+    </div>
+
+    <script>
+        function redirectToWelcome() {
+            window.location.href = 'auth/welcome.html';
+        }
+
+        // Auto-redirect after 3 seconds
+        setTimeout(() => {
+            redirectToWelcome();
+        }, 3000);
+    </script>
+</body>
+</html>
