@@ -1,4 +1,18 @@
-// Authentication utilities for HustleDesk with API integration
+// Firebase Authentication utilities for HustleDesk
+
+import { 
+    auth, 
+    db, 
+    createUserWithEmailAndPassword, 
+    signInWithEmailAndPassword, 
+    signOut,
+    googleProvider,
+    signInWithPopup,
+    onAuthStateChanged,
+    doc, 
+    setDoc, 
+    getDoc 
+} from './firebase.js';
 
 class AuthService {
     constructor() {
@@ -7,105 +21,139 @@ class AuthService {
     }
 
     init() {
-        // Load user from localStorage
+        // Set up auth state listener
+        onAuthStateChanged(auth, async (user) => {
+            if (user) {
+                this.currentUser = user;
+                // Load user profile from Firestore
+                await this.loadUserProfile(user.uid);
+            } else {
+                this.currentUser = null;
+                localStorage.removeItem('currentUser');
+            }
+        });
+
+        // Load user from localStorage if available
         const userData = localStorage.getItem('currentUser');
-        const authToken = localStorage.getItem('authToken');
-        
-        if (userData && authToken) {
+        if (userData) {
             this.currentUser = JSON.parse(userData);
         }
     }
 
-    // User registration with API
-    async register(userData) {
+    // User registration with Firebase Auth and Firestore
+    async register(name, email, password, businessName, businessCategory) {
         try {
-            const response = await apiClient.register(userData);
-            
-            // Store temp data for OTP verification
-            localStorage.setItem('tempUserData', JSON.stringify({
-                phone: userData.phone,
-                businessName: userData.business_name,
-                category: userData.business_category
-            }));
-            
-            return { success: true, ...response };
+            // Validate password strength
+            if (password.length < 6) {
+                throw new Error('Password must be at least 6 characters long');
+            }
+
+            // Create user with email and password
+            const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+            const user = userCredential.user;
+
+            // Save user profile in Firestore
+            await setDoc(doc(db, "users", user.uid), {
+                name: name,
+                email: email,
+                businessName: businessName,
+                businessCategory: businessCategory,
+                createdAt: new Date(),
+            });
+
+            console.log("User registered:", user.uid);
+            return { success: true, user: user };
         } catch (error) {
-            const message = handleApiError(error, 'Registration failed');
-            return { success: false, error: message };
+            let errorMessage = 'Registration failed';
+            
+            if (error.code === 'auth/email-already-in-use') {
+                errorMessage = 'Email already in use';
+            } else if (error.code === 'auth/invalid-email') {
+                errorMessage = 'Invalid email address';
+            } else if (error.code === 'auth/weak-password') {
+                errorMessage = 'Password is too weak';
+            }
+            
+            console.error("Registration error:", errorMessage);
+            return { success: false, error: errorMessage };
         }
     }
 
-    // OTP verification with API
-    async verifyOTP(phone, otpCode) {
+    // User login with Firebase Auth
+    async login(email, password) {
         try {
-            const response = await apiClient.verifyOTP(phone, otpCode);
+            const userCredential = await signInWithEmailAndPassword(auth, email, password);
+            const user = userCredential.user;
             
-            // Store tokens and user data
-            apiClient.setTokens(response.tokens.access, response.tokens.refresh);
-            localStorage.setItem('currentUser', JSON.stringify(response.user));
-            this.currentUser = response.user;
+            // Load user profile from Firestore
+            await this.loadUserProfile(user.uid);
             
-            return { success: true, user: response.user };
+            console.log("User logged in:", user.uid);
+            return { success: true, user: user };
         } catch (error) {
-            const message = handleApiError(error, 'OTP verification failed');
-            return { success: false, error: message };
+            let errorMessage = 'Login failed';
+            
+            if (error.code === 'auth/user-not-found') {
+                errorMessage = 'No account found with this email';
+            } else if (error.code === 'auth/wrong-password') {
+                errorMessage = 'Incorrect password';
+            } else if (error.code === 'auth/invalid-email') {
+                errorMessage = 'Invalid email address';
+            }
+            
+            console.error("Login error:", errorMessage);
+            return { success: false, error: errorMessage };
         }
     }
 
-    // User login with API
-    async login(phone, password) {
+    // Google Sign-In
+    async loginWithGoogle() {
         try {
-            const response = await apiClient.login(phone, password);
-            
-            // Store tokens and user data
-            apiClient.setTokens(response.tokens.access, response.tokens.refresh);
-            localStorage.setItem('currentUser', JSON.stringify(response.user));
-            this.currentUser = response.user;
-            
-            return { success: true, user: response.user };
+            const result = await signInWithPopup(auth, googleProvider);
+            const user = result.user;
+
+            // Save to Firestore if first time
+            const userDoc = await getDoc(doc(db, "users", user.uid));
+            if (!userDoc.exists()) {
+                await setDoc(doc(db, "users", user.uid), {
+                    name: user.displayName,
+                    email: user.email,
+                    createdAt: new Date(),
+                }, { merge: true });
+            }
+
+            console.log("Google Sign-In success:", user.uid);
+            return { success: true, user: user };
         } catch (error) {
-            const message = handleApiError(error, 'Login failed');
-            return { success: false, error: message };
+            console.error("Google Login error:", error.message);
+            return { success: false, error: 'Google login failed' };
         }
     }
 
-    // Social login (mock for now - would integrate with actual providers)
-    async loginWithProvider(provider) {
+    // Load user profile from Firestore
+    async loadUserProfile(uid) {
         try {
-            // For demo purposes, we'll create a mock user
-            // In production, this would integrate with actual OAuth providers
-            const mockUser = {
-                id: 'social-user-123',
-                username: `user_${provider}`,
-                email: `demo@${provider}.com`,
-                phone: null,
-                business_name: `${provider} Business`,
-                business_category: 'services',
-                is_phone_verified: true
-            };
-            
-            // Generate mock tokens (in production, these would come from the backend)
-            const mockTokens = {
-                access: `mock_access_token_${provider}`,
-                refresh: `mock_refresh_token_${provider}`
-            };
-            
-            // Store mock data
-            apiClient.setTokens(mockTokens.access, mockTokens.refresh);
-            localStorage.setItem('currentUser', JSON.stringify(mockUser));
-            this.currentUser = mockUser;
-            
-            return { success: true, user: mockUser };
+            const userDoc = await getDoc(doc(db, "users", uid));
+            if (userDoc.exists()) {
+                const userData = userDoc.data();
+                const userProfile = {
+                    uid: uid,
+                    email: auth.currentUser?.email,
+                    ...userData
+                };
+                localStorage.setItem('currentUser', JSON.stringify(userProfile));
+                this.currentUser = userProfile;
+                return userProfile;
+            }
         } catch (error) {
-            const message = handleApiError(error, `${provider} login failed`);
-            return { success: false, error: message };
+            console.error("Error loading user profile:", error);
         }
+        return null;
     }
 
     // Check if user is authenticated
     isAuthenticated() {
-        const authToken = localStorage.getItem('authToken');
-        return !!this.currentUser && !!authToken;
+        return !!this.currentUser;
     }
 
     // Get current user
@@ -114,33 +162,34 @@ class AuthService {
     }
 
     // Logout
-    logout() {
-        apiClient.clearTokens();
-        localStorage.removeItem('currentUser');
-        localStorage.removeItem('tempUserData');
-        this.currentUser = null;
-        window.location.href = '../index.html';
+    async logout() {
+        try {
+            await signOut(auth);
+            localStorage.removeItem('currentUser');
+            this.currentUser = null;
+            window.location.href = '../index.html';
+        } catch (error) {
+            console.error("Logout error:", error);
+        }
     }
 
     // Check if user has completed onboarding
     hasCompletedOnboarding() {
-        return this.isAuthenticated() && this.currentUser?.business_name;
+        return this.isAuthenticated() && this.currentUser?.businessName;
     }
 
     // Update user profile
     async updateProfile(updates) {
         try {
-            // This would call the backend API in production
-            // For now, we'll update localStorage
-            if (this.currentUser) {
-                this.currentUser = { ...this.currentUser, ...updates };
-                localStorage.setItem('currentUser', JSON.stringify(this.currentUser));
+            if (this.currentUser && auth.currentUser) {
+                await setDoc(doc(db, "users", auth.currentUser.uid), updates, { merge: true });
+                await this.loadUserProfile(auth.currentUser.uid);
                 return { success: true, user: this.currentUser };
             }
             return { success: false, error: 'No user logged in' };
         } catch (error) {
-            const message = handleApiError(error, 'Profile update failed');
-            return { success: false, error: message };
+            console.error("Profile update error:", error);
+            return { success: false, error: 'Profile update failed' };
         }
     }
 }

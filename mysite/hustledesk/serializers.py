@@ -11,7 +11,7 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
     
     class Meta:
         model = User
-        fields = ('username', 'email', 'phone', 'business_name', 'business_category', 'password', 'password_confirm')
+        fields = ('username', 'email', 'business_name', 'business_category', 'password', 'password_confirm')
         extra_kwargs = {
             'username': {'required': False}
         }
@@ -19,9 +19,6 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
     def validate(self, attrs):
         if attrs['password'] != attrs['password_confirm']:
             raise serializers.ValidationError("Passwords do not match")
-        
-        if User.objects.filter(phone=attrs['phone']).exists():
-            raise serializers.ValidationError("Phone number already registered")
         
         return attrs
     
@@ -31,52 +28,27 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
         
         # Generate username if not provided
         if not validated_data.get('username'):
-            validated_data['username'] = f"user_{validated_data['phone']}"
+            validated_data['username'] = f"user_{validated_data['email'].split('@')[0]}"
         
-        # Generate OTP
-        validated_data['otp_code'] = ''.join(random.choices(string.digits, k=6))
-        validated_data['otp_expiry'] = timezone.now() + timezone.timedelta(minutes=10)
-        
-        user = User.objects.create_user(**validated_data)
-        user.set_password(password)
-        user.save()
+        # Create user with password
+        user = User.objects.create_user(password=password, **validated_data)
         
         return user
 
-class OTPVerificationSerializer(serializers.Serializer):
-    phone = serializers.CharField()
-    otp_code = serializers.CharField(min_length=6, max_length=6)
-    
-    def validate(self, attrs):
-        try:
-            user = User.objects.get(phone=attrs['phone'])
-        except User.DoesNotExist:
-            raise serializers.ValidationError("User not found")
-        
-        if user.otp_code != attrs['otp_code']:
-            raise serializers.ValidationError("Invalid OTP code")
-        
-        if user.otp_expiry and user.otp_expiry < timezone.now():
-            raise serializers.ValidationError("OTP has expired")
-        
-        return attrs
-
 class UserLoginSerializer(serializers.Serializer):
-    phone = serializers.CharField()
+    email = serializers.EmailField()
     password = serializers.CharField()
     
     def validate(self, attrs):
-        phone = attrs.get('phone')
+        email = attrs.get('email')
         password = attrs.get('password')
         
-        if phone and password:
-            user = authenticate(username=phone, password=password)
+        if email and password:
+            user = authenticate(username=email, password=password)
             if not user:
-                raise serializers.ValidationError("Invalid phone number or password")
-            if not user.is_phone_verified:
-                raise serializers.ValidationError("Phone number not verified")
+                raise serializers.ValidationError("Invalid email or password")
         else:
-            raise serializers.ValidationError("Phone number and password are required")
+            raise serializers.ValidationError("Email and password are required")
         
         attrs['user'] = user
         return attrs

@@ -56,7 +56,10 @@ class APIClient {
 
             if (response.ok) {
                 const data = await response.json();
-                this.setTokens(data.access, this.refreshToken);
+                // Update both access and refresh tokens if provided
+                const newAccessToken = data.access || this.token;
+                const newRefreshToken = data.refresh || this.refreshToken;
+                this.setTokens(newAccessToken, newRefreshToken);
                 return true;
             }
         } catch (error) {
@@ -157,7 +160,7 @@ class APIClient {
     async getCustomer(id) {
         return this.request(`/customers/${id}/`);
     }
-
+ 
     async updateCustomer(id, customerData) {
         return this.request(`/customers/${id}/`, {
             method: 'PUT',

@@ -16,8 +16,14 @@ Including another URLconf
 """
 from django.contrib import admin
 from django.urls import path, include
+from hustledesk.views import home_view, register_view, login_view, welcome_view
+from django.views.generic import RedirectView
 
 urlpatterns = [
+    path('', home_view, name='home'),
     path('admin/', admin.site.urls),
     path('api/', include('hustledesk.urls')),
+    path('auth/register/', register_view, name='register'),
+    path('auth/login/', login_view, name='login'),
+    path('auth/welcome/', welcome_view, name='welcome'),
 ]

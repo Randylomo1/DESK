@@ -4,17 +4,17 @@ from .models import User, Customer, Sale, Expense, Invoice, Task
 
 @admin.register(User)
 class CustomUserAdmin(UserAdmin):
-    list_display = ('username', 'email', 'phone', 'business_name', 'business_category', 'is_phone_verified')
-    list_filter = ('business_category', 'is_phone_verified', 'is_staff', 'is_active')
-    search_fields = ('username', 'email', 'phone', 'business_name')
+    list_display = ('username', 'email', 'business_name', 'business_category')
+    list_filter = ('business_category', 'is_staff', 'is_active')
+    search_fields = ('username', 'email', 'business_name')
     fieldsets = UserAdmin.fieldsets + (
         ('Business Information', {
-            'fields': ('phone', 'business_name', 'business_category', 'is_phone_verified')
+            'fields': ('business_name', 'business_category')
         }),
     )
     add_fieldsets = UserAdmin.add_fieldsets + (
         ('Business Information', {
-            'fields': ('phone', 'business_name', 'business_category')
+            'fields': ('business_name', 'business_category')
         }),
     )
 

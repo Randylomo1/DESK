@@ -1,10 +1,10 @@
 from django.db import models
 from django.contrib.auth.models import AbstractUser
 from django.core.validators import MinValueValidator
+from rest_framework_simplejwt.tokens import RefreshToken
 import uuid
 
 class User(AbstractUser):
-    phone = models.CharField(max_length=15, unique=True, null=True, blank=True)
     business_name = models.CharField(max_length=255)
     business_category = models.CharField(max_length=100, choices=[
         ('food', 'Food & Restaurant'),
@@ -15,12 +15,17 @@ class User(AbstractUser):
         ('electronics', 'Electronics'),
         ('other', 'Other')
     ])
-    is_phone_verified = models.BooleanField(default=False)
-    otp_code = models.CharField(max_length=6, null=True, blank=True)
-    otp_expiry = models.DateTimeField(null=True, blank=True)
     
     def __str__(self):
         return f"{self.username} - {self.business_name}"
+    
+    def get_tokens(self):
+        """Generate JWT tokens for the user"""
+        refresh = RefreshToken.for_user(self)
+        return {
+            'refresh': str(refresh),
+            'access': str(refresh.access_token),
+        }
 
 class Customer(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
