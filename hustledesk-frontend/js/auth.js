@@ -1,18 +1,4 @@
-// Firebase Authentication utilities for HustleDesk
-
-import { 
-    auth, 
-    db, 
-    createUserWithEmailAndPassword, 
-    signInWithEmailAndPassword, 
-    signOut,
-    googleProvider,
-    signInWithPopup,
-    onAuthStateChanged,
-    doc, 
-    setDoc, 
-    getDoc 
-} from './firebase.js';
+// Django Authentication utilities for HustleDesk
 
 class AuthService {
     constructor() {
@@ -21,176 +7,123 @@ class AuthService {
     }
 
     init() {
-        // Set up auth state listener
-        onAuthStateChanged(auth, async (user) => {
-            if (user) {
-                this.currentUser = user;
-                // Load user profile from Firestore
-                await this.loadUserProfile(user.uid);
-            } else {
-                this.currentUser = null;
-                localStorage.removeItem('currentUser');
-            }
-        });
-
-        // Load user from localStorage if available
-        const userData = localStorage.getItem('currentUser');
-        if (userData) {
-            this.currentUser = JSON.parse(userData);
+        // Load user state from localStorage
+        const isAuthenticated = localStorage.getItem('isAuthenticated');
+        if (isAuthenticated) {
+            // In a real app, you might want to verify the session with the backend here
+            this.currentUser = { isAuthenticated: true }; 
         }
     }
 
-    // User registration with Firebase Auth and Firestore
+    // User registration with Django backend
     async register(name, email, password, businessName, businessCategory) {
         try {
-            // Validate password strength
-            if (password.length < 6) {
-                throw new Error('Password must be at least 6 characters long');
-            }
-
-            // Create user with email and password
-            const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-            const user = userCredential.user;
-
-            // Save user profile in Firestore
-            await setDoc(doc(db, "users", user.uid), {
-                name: name,
-                email: email,
-                businessName: businessName,
-                businessCategory: businessCategory,
-                createdAt: new Date(),
+            const response = await fetch('/api/register/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    // Django's CSRF token needs to be included in headers
+                    'X-CSRFToken': this.getCsrfToken() 
+                },
+                body: JSON.stringify({
+                    username: email, // Assuming email is the username
+                    email: email,
+                    password: password,
+                    first_name: name,
+                    // You might need to adjust your Django backend to accept these fields
+                    business_name: businessName,
+                    business_category: businessCategory
+                })
             });
 
-            console.log("User registered:", user.uid);
-            return { success: true, user: user };
-        } catch (error) {
-            let errorMessage = 'Registration failed';
-            
-            if (error.code === 'auth/email-already-in-use') {
-                errorMessage = 'Email already in use';
-            } else if (error.code === 'auth/invalid-email') {
-                errorMessage = 'Invalid email address';
-            } else if (error.code === 'auth/weak-password') {
-                errorMessage = 'Password is too weak';
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.message || 'Registration failed');
             }
-            
-            console.error("Registration error:", errorMessage);
-            return { success: false, error: errorMessage };
+
+            const data = await response.json();
+            return { success: true, message: data.message };
+
+        } catch (error) {
+            console.error("Registration error:", error.message);
+            return { success: false, error: error.message };
         }
     }
 
-    // User login with Firebase Auth
+    // User login with Django backend
     async login(email, password) {
         try {
-            const userCredential = await signInWithEmailAndPassword(auth, email, password);
-            const user = userCredential.user;
-            
-            // Load user profile from Firestore
-            await this.loadUserProfile(user.uid);
-            
-            console.log("User logged in:", user.uid);
-            return { success: true, user: user };
-        } catch (error) {
-            let errorMessage = 'Login failed';
-            
-            if (error.code === 'auth/user-not-found') {
-                errorMessage = 'No account found with this email';
-            } else if (error.code === 'auth/wrong-password') {
-                errorMessage = 'Incorrect password';
-            } else if (error.code === 'auth/invalid-email') {
-                errorMessage = 'Invalid email address';
+            const response = await fetch('/api/login/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': this.getCsrfToken()
+                },
+                body: JSON.stringify({
+                    username: email,
+                    password: password
+                })
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.message || 'Login failed');
             }
             
-            console.error("Login error:", errorMessage);
-            return { success: false, error: errorMessage };
+            const data = await response.json();
+            localStorage.setItem('isAuthenticated', 'true');
+            this.currentUser = { isAuthenticated: true };
+
+            return { success: true };
+
+        } catch (error) {
+            console.error("Login error:", error.message);
+            return { success: false, error: error.message };
         }
     }
 
-    // Google Sign-In
-    async loginWithGoogle() {
+    // Logout from Django backend
+    async logout() {
         try {
-            const result = await signInWithPopup(auth, googleProvider);
-            const user = result.user;
-
-            // Save to Firestore if first time
-            const userDoc = await getDoc(doc(db, "users", user.uid));
-            if (!userDoc.exists()) {
-                await setDoc(doc(db, "users", user.uid), {
-                    name: user.displayName,
-                    email: user.email,
-                    createdAt: new Date(),
-                }, { merge: true });
-            }
-
-            console.log("Google Sign-In success:", user.uid);
-            return { success: true, user: user };
+            await fetch('/api/logout/', {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': this.getCsrfToken()
+                }
+            });
         } catch (error) {
-            console.error("Google Login error:", error.message);
-            return { success: false, error: 'Google login failed' };
+            console.error("Logout error:", error);
+        } finally {
+            localStorage.removeItem('isAuthenticated');
+            this.currentUser = null;
+            window.location.href = '/auth/login.html';
         }
-    }
-
-    // Load user profile from Firestore
-    async loadUserProfile(uid) {
-        try {
-            const userDoc = await getDoc(doc(db, "users", uid));
-            if (userDoc.exists()) {
-                const userData = userDoc.data();
-                const userProfile = {
-                    uid: uid,
-                    email: auth.currentUser?.email,
-                    ...userData
-                };
-                localStorage.setItem('currentUser', JSON.stringify(userProfile));
-                this.currentUser = userProfile;
-                return userProfile;
-            }
-        } catch (error) {
-            console.error("Error loading user profile:", error);
-        }
-        return null;
     }
 
     // Check if user is authenticated
     isAuthenticated() {
-        return !!this.currentUser;
+        return !!this.currentUser && localStorage.getItem('isAuthenticated') === 'true';
     }
 
-    // Get current user
+    // Get current user (simplified)
     getCurrentUser() {
         return this.currentUser;
     }
-
-    // Logout
-    async logout() {
-        try {
-            await signOut(auth);
-            localStorage.removeItem('currentUser');
-            this.currentUser = null;
-            window.location.href = '../index.html';
-        } catch (error) {
-            console.error("Logout error:", error);
-        }
-    }
-
-    // Check if user has completed onboarding
-    hasCompletedOnboarding() {
-        return this.isAuthenticated() && this.currentUser?.businessName;
-    }
-
-    // Update user profile
-    async updateProfile(updates) {
-        try {
-            if (this.currentUser && auth.currentUser) {
-                await setDoc(doc(db, "users", auth.currentUser.uid), updates, { merge: true });
-                await this.loadUserProfile(auth.currentUser.uid);
-                return { success: true, user: this.currentUser };
+    
+    // Helper to get CSRF token from cookies
+    getCsrfToken() {
+        let csrfToken = null;
+        if (document.cookie && document.cookie !== '') {
+            const cookies = document.cookie.split(';');
+            for (let i = 0; i < cookies.length; i++) {
+                const cookie = cookies[i].trim();
+                if (cookie.substring(0, 'csrftoken'.length + 1) === ('csrftoken' + '=')) {
+                    csrfToken = decodeURIComponent(cookie.substring('csrftoken'.length + 1));
+                    break;
+                }
             }
-            return { success: false, error: 'No user logged in' };
-        } catch (error) {
-            console.error("Profile update error:", error);
-            return { success: false, error: 'Profile update failed' };
         }
+        return csrfToken;
     }
 }
 
@@ -200,18 +133,23 @@ const authService = new AuthService();
 // Utility functions for auth-related operations
 function requireAuth() {
     if (!authService.isAuthenticated()) {
-        window.location.href = '../auth/welcome.html';
+        window.location.href = '/auth/login.html';
         return false;
     }
     return true;
 }
 
+// These functions can be used to show messages to the user
 function showAuthError(message) {
-    showToast(message, 'error');
+    // You can implement a toast notification or other UI element here
+    console.error("Auth Error:", message);
+    alert(message); // Simple alert for now
 }
 
 function showAuthSuccess(message) {
-    showToast(message, 'success');
+    // You can implement a toast notification or other UI element here
+    console.log("Auth Success:", message);
+    alert(message); // Simple alert for now
 }
 
 // Export for use in other files

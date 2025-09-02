@@ -6,8 +6,8 @@
     <title>Login - HustleDesk</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="../static/css/styles.css">
-    <script type="module" src="./js/firebase.js"></script>
-    <script type="module" src="./js/auth.js"></script>
+    <script type="module" src="../js/firebase.js"></script>
+    <script type="module" src="../js/auth.js"></script>
 </head>
 <body class="bg-gray-50 min-h-screen">
     <div class="max-w-md mx-auto min-h-screen flex flex-col">
@@ -65,7 +65,7 @@
 
                 <!-- Forgot Password -->
                 <div class="text-right">
-                    <a href="#" class="text-sm text-blue-600 hover:underline">Forgot password?</a>
+                    <a href="forgot-password.html" class="text-sm text-blue-600 hover:underline">Forgot password?</a>
                 </div>
 
                 <!-- Submit Button -->
@@ -81,7 +81,13 @@
         </div>
     </div>
 
-    <script>
+    <script type="module">
+        import { authService } from '../js/auth.js';
+
+        if (authService.isAuthenticated()) {
+            window.location.href = '../dashboard.html';
+        }
+
         async function signInWithGoogle() {
             try {
                 const response = await authService.loginWithGoogle();
